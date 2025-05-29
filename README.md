@@ -1,3 +1,4 @@
+![alt text](https://github.com/Lorentious/json-ha/blob/[branch]/image.jpg?raw=true)
 # JSON-HA
 TEST
 
