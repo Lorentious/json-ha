@@ -1,9 +1,0 @@
-{
-  "domain": "json_ha",
-  "name": "Json-HA",
-  "version": "1.0.0",
-  "documentation": "https://github.com/Lorentious/json-ha",
-  "requirements": [],
-  "dependencies": [],
-  "codeowners": ["@Lorentious"]
-}
