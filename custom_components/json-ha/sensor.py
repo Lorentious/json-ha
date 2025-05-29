@@ -21,7 +21,9 @@ def flatten_keys(d, parent_key=""):
 def get_value_from_path(data, path):
     """Hole Wert anhand Pfad mit Punkt-Notation"""
     for part in path.split("."):
-        data = data.get(part, {})
+        if not isinstance(data, dict):
+            return None
+        data = data.get(part)
     return data if not isinstance(data, dict) else None
 
 async def async_setup_entry(hass, entry, async_add_entities):
