@@ -19,7 +19,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Versuche JSON zu laden
             try:
-                url = f"http://{self.ip}/status.json"
+                url = f"http://{self.ip}/"
                 resp = requests.get(url, timeout=5)
                 data = resp.json()
 
