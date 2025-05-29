@@ -29,12 +29,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     name = entry.data["name"]
     update_interval = entry.data.get("update_interval", 60)
     selected_groups = entry.data["selected_groups"]
-    if group == "SBI_ROOT":
-        root_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
-        keys = flatten_keys(root_keys, "SBI")
-    else:
-        group_data = sbi.get(group, {})
-        keys = flatten_keys(group_data, group)
 
     entities = []
     session = async_get_clientsession(hass)
@@ -46,13 +40,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
             async with session.get(url, timeout=5) as resp:
                 data = await resp.json()
             sbi = data.get("SBI", {})
+            if group == "SBI_ROOT":
+                root_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
+                keys = flatten_keys(root_keys, "SBI")
+            else:
+                group_data = sbi.get(group, {})
+                keys = flatten_keys(group_data, group)
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
             for key in keys:
                 entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval))
         except Exception as e:
             _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten für Gruppe {group}: {e}")
-
+            
     async_add_entities(entities, True)
 
 class JsonHaSensor(Entity):
