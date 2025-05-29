@@ -1,7 +1,11 @@
 from homeassistant import config_entries
 import voluptuous as vol
-import requests
 from .const import DOMAIN, DEFAULT_URL
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import async_timeout
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
@@ -13,23 +17,26 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self.ip = user_input["ip_address"]
             self.name = user_input["name"]
-            interval = user_input.get("interval", 30)
+            self.update_interval = user_input["update_interval"]
+
+            session = async_get_clientsession(self.hass)
+            url = DEFAULT_URL.format(ip=self.ip)
 
             try:
-                url = DEFAULT_URL.format(ip=self.ip)
-                resp = requests.get(url, timeout=5)
-                data = resp.json()
-                self.available_groups = list(data["SBI"].keys())
-                self.interval = interval
-
+                async with async_timeout.timeout(5):
+                    resp = await session.get(url)
+                    resp.raise_for_status()
+                    data = await resp.json()
+                self.available_groups = list(data["SBI"].keys())  # e.g. SB, GRID, INV
                 return await self.async_step_select_groups()
-            except Exception:
+            except Exception as e:
+                _LOGGER.error(f"Cannot connect to {url}: {e}")
                 return self.async_show_form(
                     step_id="user",
                     data_schema=vol.Schema({
                         vol.Required("ip_address"): str,
                         vol.Required("name"): str,
-                        vol.Required("interval", default=30): int
+                        vol.Required("update_interval", default=60): int,
                     }),
                     errors={"base": "cannot_connect"}
                 )
@@ -39,27 +46,25 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required("ip_address"): str,
                 vol.Required("name"): str,
-                vol.Required("interval", default=30): int
+                vol.Required("update_interval", default=60): int,
             })
         )
 
     async def async_step_select_groups(self, user_input=None):
         if user_input is not None:
-            selected = [g for g, v in user_input.items() if v]
+            selected_groups = [k for k, v in user_input.items() if v]
             return self.async_create_entry(
                 title=self.name,
                 data={
                     "ip_address": self.ip,
                     "name": self.name,
-                    "selected_groups": selected,
-                    "interval": self.interval
+                    "groups": selected_groups,
+                    "update_interval": self.update_interval,
                 }
             )
-
         schema = vol.Schema({
-            vol.Optional(group): True for group in self.available_groups
+            vol.Optional(group): bool for group in self.available_groups
         })
-
         return self.async_show_form(
             step_id="select_groups",
             data_schema=schema
