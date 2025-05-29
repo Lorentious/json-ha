@@ -2,7 +2,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "snettbox-ha"
+DOMAIN = "json-ha"
 
 async def async_setup(hass, config):
     """Erstes Setup beim Start von Home Assistant."""
