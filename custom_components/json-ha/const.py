@@ -1,3 +1,2 @@
 DOMAIN = "json-ha"
-DEFAULT_PORT = 80
-DEFAULT_URL = "http://192.168.100.1"
+DEFAULT_URL = "http://{ip}/"
