@@ -1,8 +1,8 @@
 {
-  "domain": "snettbox_ha",
-  "name": "Snettbox-HA",
+  "domain": "json_ha",
+  "name": "Json-HA",
   "version": "1.0.0",
-  "documentation": "https://github.com/Lorentious/snettbox-ha",
+  "documentation": "https://github.com/Lorentious/json-ha",
   "requirements": [],
   "dependencies": [],
   "codeowners": ["@Lorentious"]
