@@ -1,2 +1,2 @@
-# Snettbox-HA
+# JSON-HA
 TEST
