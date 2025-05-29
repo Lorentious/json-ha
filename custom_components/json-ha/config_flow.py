@@ -11,7 +11,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         self.ip = None
         self.name = None
-        self.available_keys = []
+        self.available_groups = []
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
@@ -26,8 +26,9 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     resp = await session.get(url)
                     resp.raise_for_status()
                     data = await resp.json()
-                self.available_keys = flatten_keys(data.get("SBI", {}))
-                return await self.async_step_select_keys()
+                sbi = data.get("SBI", {})
+                self.available_groups = list(sbi.keys())  # Hauptgruppen
+                return await self.async_step_select_groups()
             except Exception as e:
                 _LOGGER.error(f"Cannot connect to {url}: {e}")
                 return self.async_show_form(
@@ -49,34 +50,23 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             })
         )
 
-    async def async_step_select_keys(self, user_input=None):
+    async def async_step_select_groups(self, user_input=None):
         if user_input is not None:
-            selected_keys = [k for k, v in user_input.items() if v]
+            selected_groups = [grp for grp, val in user_input.items() if val]
             return self.async_create_entry(
                 title=self.name,
                 data={
                     "ip_address": self.ip,
                     "name": self.name,
                     "update_interval": self.update_interval,
-                    "selected_keys": selected_keys
+                    "selected_groups": selected_groups,
                 }
             )
 
         schema = vol.Schema({
-            vol.Optional(key): bool for key in self.available_keys
+            vol.Optional(group): bool for group in self.available_groups
         })
         return self.async_show_form(
-            step_id="select_keys",
-            data_schema=schema
+            step_id="select_groups",
+            data_schema=schema,
         )
-
-
-def flatten_keys(d, parent_key=""):
-    items = []
-    for k, v in d.items():
-        new_key = f"{parent_key}.{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_keys(v, new_key))
-        else:
-            items.append(new_key)
-    return items
