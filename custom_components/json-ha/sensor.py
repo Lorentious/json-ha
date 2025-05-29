@@ -16,7 +16,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     selected_keys = entry.data["selected_keys"]
 
     try:
-        response = requests.get(f"http://{ip}/status.json", timeout=5)
+        response = requests.get(f"http://{ip}/", timeout=5)
         data = response.json()["SBI"]
     except Exception as e:
         _LOGGER.error("Fehler beim Abrufen der JSON-Daten: %s", e)
