@@ -14,40 +14,48 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.available_groups = []
 
     async def async_step_user(self, user_input=None):
-        if user_input is not None:
-            self.ip = user_input["ip_address"]
-            self.name = user_input["name"]
-            self.update_interval = user_input.get("update_interval", 60)
-            session = async_get_clientsession(self.hass)
-            url = DEFAULT_URL.format(ip=self.ip)
+    if user_input is not None:
+        self.ip = user_input["ip_address"]
+        self.name = user_input["name"]
+        self.update_interval = user_input.get("update_interval", 60)
+        session = async_get_clientsession(self.hass)
+        url = DEFAULT_URL.format(ip=self.ip)
 
-            try:
-                async with async_timeout.timeout(5):
-                    resp = await session.get(url)
-                    resp.raise_for_status()
-                    data = await resp.json()
-                sbi = data.get("SBI", {})
-                self.available_groups = []
-                for key, val in sbi.items():
-                    if isinstance(val, dict):
-                        self.available_groups.append(key)
-                    else:
-                    # Wurzel-Werte -> in Gruppe "SBI_ROOT" zusammenfassen
+        try:
+            async with async_timeout.timeout(5):
+                resp = await session.get(url)
+                resp.raise_for_status()
+                data = await resp.json()
+            sbi = data.get("SBI", {})
+            self.available_groups = []
+            for key, val in sbi.items():
+                if isinstance(val, dict):
+                    self.available_groups.append(key)
+                else:
                     self.available_groups.append("SBI_ROOT")
                     break  # Nur einmal hinzufügen
-                self.available_groups = list(sbi.keys())  # Hauptgruppen
-                return await self.async_step_select_groups()
-            except Exception as e:
-                _LOGGER.error(f"Cannot connect to {url}: {e}")
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=vol.Schema({
-                        vol.Required("ip_address"): str,
-                        vol.Required("name"): str,
-                        vol.Required("update_interval", default=60): int,
-                    }),
-                    errors={"base": "cannot_connect"}
-                )
+            return await self.async_step_select_groups()
+        except Exception as e:
+            _LOGGER.error(f"Cannot connect to {url}: {e}")
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema({
+                    vol.Required("ip_address"): str,
+                    vol.Required("name"): str,
+                    vol.Required("update_interval", default=60): int,
+                }),
+                errors={"base": "cannot_connect"}
+            )
+
+    return self.async_show_form(
+        step_id="user",
+        data_schema=vol.Schema({
+            vol.Required("ip_address"): str,
+            vol.Required("name"): str,
+            vol.Required("update_interval", default=60): int,
+        })
+    )
+
 
         return self.async_show_form(
             step_id="user",
