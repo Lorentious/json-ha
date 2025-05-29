@@ -2,6 +2,7 @@ from homeassistant import config_entries
 import voluptuous as vol
 import requests
 from .const import DOMAIN
+from .const import DEFAULT_URL
 
 class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for json_ha."""
@@ -19,7 +20,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Versuche JSON zu laden
             try:
-                url = f"http://{self.ip}/"
+                url = DEFAULT_URL.format(ip=self.ip)
                 resp = requests.get(url, timeout=5)
                 data = resp.json()
 
