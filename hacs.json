@@ -1,5 +1,5 @@
 {
-  "name": "Snettbox-HA",
+  "name": "JSON-HA",
   "content_in_root": false,
   "domains": ["sensor"],
   "country": "DE",
