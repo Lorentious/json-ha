@@ -27,7 +27,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class JsonHaSensor(Entity):
     def __init__(self, hass, name, key, ip, update_interval):
         self._hass = hass
-        self._name = name
+        self._name = f"{name} {key.replace('.', '_')}"
         self._key = key
         self._ip = ip
         self._state = None
@@ -35,19 +35,28 @@ class JsonHaSensor(Entity):
         self._update_interval = timedelta(seconds=update_interval)
 
     @property
+    def name(self):
+        return self._name
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def unique_id(self):
+        return f"{self._ip}_{self._key}"
+
+    @property
     def should_poll(self):
-        return False  # keine automatische Abfrage von HA
+        return False  # Kein automatisches Polling von HA
 
     async def async_added_to_hass(self):
-        # Callback alle update_interval Sekunden aufrufen
         self._unsub_update = async_track_time_interval(
             self._hass, self.async_update, self._update_interval
         )
-        # Direkt initial updaten
         await self.async_update()
 
     async def async_will_remove_from_hass(self):
-        # Stoppe Timer, wenn Entity entfernt wird
         if self._unsub_update:
             self._unsub_update()
             self._unsub_update = None
