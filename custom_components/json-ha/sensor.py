@@ -2,6 +2,7 @@ from homeassistant.helpers.entity import Entity
 import requests
 import logging
 from .const import DOMAIN
+from .const import DEFAULT_URL
 
 _LOGGER = logging.getLogger(__name__)
 
