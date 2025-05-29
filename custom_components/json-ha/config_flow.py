@@ -1,39 +1,35 @@
 from homeassistant import config_entries
 import voluptuous as vol
+import requests
 from .const import DOMAIN, DEFAULT_URL
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import async_timeout
-import logging
-
-_LOGGER = logging.getLogger(__name__)
 
 class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         self.ip = None
         self.name = None
-        self.available_keys = []
+        self.available_groups = []
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
             self.ip = user_input["ip_address"]
             self.name = user_input["name"]
-            session = async_get_clientsession(self.hass)
-            url = DEFAULT_URL.format(ip=self.ip)
+            interval = user_input.get("interval", 30)
 
             try:
-                async with async_timeout.timeout(5):
-                    resp = await session.get(url)
-                    resp.raise_for_status()
-                    data = await resp.json()
-                self.available_keys = flatten_keys(data["SBI"])
-                return await self.async_step_select_keys()
-            except Exception as e:
-                _LOGGER.error(f"Cannot connect to {url}: {e}")
+                url = DEFAULT_URL.format(ip=self.ip)
+                resp = requests.get(url, timeout=5)
+                data = resp.json()
+                self.available_groups = list(data["SBI"].keys())
+                self.interval = interval
+
+                return await self.async_step_select_groups()
+            except Exception:
                 return self.async_show_form(
                     step_id="user",
                     data_schema=vol.Schema({
                         vol.Required("ip_address"): str,
-                        vol.Required("name"): str
+                        vol.Required("name"): str,
+                        vol.Required("interval", default=30): int
                     }),
                     errors={"base": "cannot_connect"}
                 )
@@ -42,35 +38,29 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required("ip_address"): str,
-                vol.Required("name"): str
+                vol.Required("name"): str,
+                vol.Required("interval", default=30): int
             })
         )
 
-    async def async_step_select_keys(self, user_input=None):
+    async def async_step_select_groups(self, user_input=None):
         if user_input is not None:
-            selected_keys = [k for k, v in user_input.items() if v]
+            selected = [g for g, v in user_input.items() if v]
             return self.async_create_entry(
                 title=self.name,
                 data={
                     "ip_address": self.ip,
                     "name": self.name,
-                    "selected_keys": selected_keys
+                    "selected_groups": selected,
+                    "interval": self.interval
                 }
             )
+
         schema = vol.Schema({
-            vol.Optional(key): bool for key in self.available_keys
+            vol.Optional(group): True for group in self.available_groups
         })
+
         return self.async_show_form(
-            step_id="select_keys",
+            step_id="select_groups",
             data_schema=schema
         )
-
-def flatten_keys(d, parent_key=""):
-    items = []
-    for k, v in d.items():
-        new_key = f"{parent_key}.{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_keys(v, new_key))
-        else:
-            items.append(new_key)
-    return items
