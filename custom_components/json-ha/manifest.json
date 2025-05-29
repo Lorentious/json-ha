@@ -1,7 +1,7 @@
 {
   "domain": "json-ha",
   "name": "JSON-HA",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "documentation": "https://github.com/deinname/json-ha",
   "config_flow": true,
   "requirements": [],
