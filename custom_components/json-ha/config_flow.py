@@ -27,6 +27,14 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     resp.raise_for_status()
                     data = await resp.json()
                 sbi = data.get("SBI", {})
+                self.available_groups = []
+                for key, val in sbi.items():
+                    if isinstance(val, dict):
+                        self.available_groups.append(key)
+                    else:
+                    # Wurzel-Werte -> in Gruppe "SBI_ROOT" zusammenfassen
+                    self.available_groups.append("SBI_ROOT")
+                    break  # Nur einmal hinzufügen
                 self.available_groups = list(sbi.keys())  # Hauptgruppen
                 return await self.async_step_select_groups()
             except Exception as e:
