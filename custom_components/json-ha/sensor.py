@@ -2,6 +2,8 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 from .const import DOMAIN
+from homeassistant.helpers.event import async_track_time_interval
+from datetime import timedelta
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,40 +15,44 @@ def get_value_from_path(data, path):
 async def async_setup_entry(hass, entry, async_add_entities):
     ip = entry.data["ip_address"]
     name = entry.data["name"]
+    update_interval = entry.data.get("update_interval", 60)
     selected_keys = entry.data["selected_keys"]
 
     entities = []
     for key in selected_keys:
-        entities.append(JsonHaSensor(hass, name, key, ip))
+        entities.append(JsonHaSensor(hass, name, key, ip, update_interval))
 
     async_add_entities(entities, True)
 
 class JsonHaSensor(Entity):
-    def __init__(self, hass, prefix, key, ip):
+    def __init__(self, hass, name, key, ip, update_interval):
         self._hass = hass
+        self._name = name
         self._key = key
         self._ip = ip
-        self._name = f"{prefix} {key.replace('.', '_')}"
         self._state = None
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def state(self):
-        return self._state
-
-    @property
-    def unique_id(self):
-        return f"{self._ip}_{self._key}"
+        self._unsub_update = None
+        self._update_interval = timedelta(seconds=update_interval)
 
     @property
     def should_poll(self):
-        return True  # Polling aktiviert
+        return False  # keine automatische Abfrage von HA
 
-    async def async_update(self):
-        """Hol Daten neu via HTTP."""
+    async def async_added_to_hass(self):
+        # Callback alle update_interval Sekunden aufrufen
+        self._unsub_update = async_track_time_interval(
+            self._hass, self.async_update, self._update_interval
+        )
+        # Direkt initial updaten
+        await self.async_update()
+
+    async def async_will_remove_from_hass(self):
+        # Stoppe Timer, wenn Entity entfernt wird
+        if self._unsub_update:
+            self._unsub_update()
+            self._unsub_update = None
+
+    async def async_update(self, now=None):
         url = f"http://{self._ip}/"
         session = async_get_clientsession(self._hass)
         try:
@@ -54,6 +60,7 @@ class JsonHaSensor(Entity):
                 data = await resp.json()
             sbi = data.get("SBI", {})
             self._state = get_value_from_path(sbi, self._key)
+            self.async_write_ha_state()
         except Exception as e:
-            _LOGGER.error("Fehler beim Abrufen der JSON-Daten: %s", e)
+            _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
             self._state = None
