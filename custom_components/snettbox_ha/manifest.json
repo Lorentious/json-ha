@@ -1,0 +1,9 @@
+{
+  "domain": "snettbox_ha",
+  "name": "Snettbox-HA",
+  "version": "1.0.0",
+  "documentation": "https://github.com/Lorentious/snettbox-ha",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@Lorentious"]
+}
