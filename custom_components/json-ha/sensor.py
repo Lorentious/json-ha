@@ -1,51 +1,33 @@
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.device_registry import DeviceInfo
 import logging
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+def get_value_from_path(data, path):
+    for part in path.split("."):
+        data = data.get(part, {})
+    return data if not isinstance(data, dict) else None
+
 async def async_setup_entry(hass, entry, async_add_entities):
     ip = entry.data["ip_address"]
     name = entry.data["name"]
-    groups = entry.data["groups"]
-    interval = entry.data.get("update_interval", 60)
-
-    session = async_get_clientsession(hass)
-    try:
-        async with session.get(f"http://{ip}/", timeout=5) as resp:
-            data = await resp.json()
-        sbi = data.get("SBI", {})
-    except Exception as e:
-        _LOGGER.error("Fehler beim Abrufen der JSON-Daten: %s", e)
-        return
+    selected_keys = entry.data["selected_keys"]
 
     entities = []
-    for group in groups:
-        if group not in sbi:
-            continue
-        for key, value in sbi[group].items():
-            full_key = f"{group}.{key}"
-            entities.append(JsonHaSensor(hass, name, full_key, ip, interval))
+    for key in selected_keys:
+        entities.append(JsonHaSensor(hass, name, key, ip))
 
     async_add_entities(entities, True)
 
 class JsonHaSensor(Entity):
-    def __init__(self, hass, prefix, key, ip, interval):
+    def __init__(self, hass, prefix, key, ip):
         self._hass = hass
         self._key = key
         self._ip = ip
         self._name = f"{prefix} {key.replace('.', '_')}"
         self._state = None
-        self._interval = interval
-        self._device_info = DeviceInfo(
-            identifiers={(DOMAIN, ip)},
-            name=prefix,
-            manufacturer="Snettbox",
-            model="JSON-HA",
-            configuration_url=f"http://{ip}/",
-        )
 
     @property
     def name(self):
@@ -61,21 +43,17 @@ class JsonHaSensor(Entity):
 
     @property
     def should_poll(self):
-        return True
-
-    @property
-    def device_info(self):
-        return self._device_info
+        return True  # Polling aktiviert
 
     async def async_update(self):
+        """Hol Daten neu via HTTP."""
         url = f"http://{self._ip}/"
         session = async_get_clientsession(self._hass)
         try:
             async with session.get(url, timeout=5) as resp:
                 data = await resp.json()
             sbi = data.get("SBI", {})
-            group, field = self._key.split(".")
-            self._state = sbi.get(group, {}).get(field)
+            self._state = get_value_from_path(sbi, self._key)
         except Exception as e:
-            _LOGGER.error("Fehler beim Abrufen von %s: %s", self._key, e)
+            _LOGGER.error("Fehler beim Abrufen der JSON-Daten: %s", e)
             self._state = None
