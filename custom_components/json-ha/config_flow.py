@@ -17,7 +17,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self.ip = user_input["ip_address"]
             self.name = user_input["name"]
-            self.update_interval = user_input.get("update_interval", 60)
+            self.update_interval = user_input.get("update_interval", 15)
             session = async_get_clientsession(self.hass)
             url = DEFAULT_URL.format(ip=self.ip)
 
@@ -36,7 +36,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data_schema=vol.Schema({
                         vol.Required("ip_address"): str,
                         vol.Required("name"): str,
-                        vol.Required("update_interval", default=60): int,
+                        vol.Required("update_interval", default=15): int,
                     }),
                     errors={"base": "cannot_connect"}
                 )
@@ -46,7 +46,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required("ip_address"): str,
                 vol.Required("name"): str,
-                vol.Required("update_interval", default=60): int,
+                vol.Required("update_interval", default=15): int,
             })
         )
 
