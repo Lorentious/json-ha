@@ -33,19 +33,26 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = []
     session = async_get_clientsession(hass)
 
-    # Für jede Gruppe alle Keys holen, Sensoren erzeugen
-    for group in selected_groups:
-        url = f"http://{ip}/"
-        try:
-            async with session.get(url, timeout=5) as resp:
-                data = await resp.json()
-            sbi = data.get("SBI", {})
+    url = f"http://{ip}/"
+    try:
+        async with session.get(url, timeout=5) as resp:
+            data = await resp.json()
+        sbi = data.get("SBI", {})
+
+        # Top-Level Keys, die KEINE dicts sind
+        for key, value in sbi.items():
+            if not isinstance(value, dict):
+                entities.append(JsonHaSensor(hass, name, "", key, ip, update_interval))
+
+        # Für jede Gruppe alle Keys holen, Sensoren erzeugen
+        for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
             for key in keys:
                 entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval))
-        except Exception as e:
-            _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten für Gruppe {group}: {e}")
+
+    except Exception as e:
+        _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
 
     async_add_entities(entities, True)
 
@@ -61,8 +68,11 @@ class JsonHaSensor(Entity):
         self._update_interval = timedelta(seconds=update_interval)
 
         # Name: <base_name> <group> <key> (key ohne group, nur letzter Teil)
-        key_short = key[len(group)+1:] if key.startswith(group + ".") else key
-        self._name = f"{base_name} {group} {key_short}"
+        if group:
+            key_short = key[len(group)+1:] if key.startswith(group + ".") else key
+            self._name = f"{base_name} {group} {key_short}"
+        else:
+            self._name = f"{base_name} {key}"
 
     @property
     def name(self):
@@ -99,7 +109,6 @@ class JsonHaSensor(Entity):
             async with session.get(url, timeout=5) as resp:
                 data = await resp.json()
             sbi = data.get("SBI", {})
-            # Wert anhand key abrufen
             self._state = get_value_from_path(sbi, self._key)
             self.async_write_ha_state()
         except Exception as e:
