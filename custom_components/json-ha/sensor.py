@@ -8,7 +8,6 @@ from datetime import timedelta
 _LOGGER = logging.getLogger(__name__)
 
 def flatten_keys(d, parent_key=""):
-    """Rekursiv alle Keys aus dict holen, mit Punkt-Notation"""
     items = []
     for k, v in d.items():
         new_key = f"{parent_key}.{k}" if parent_key else k
@@ -19,7 +18,6 @@ def flatten_keys(d, parent_key=""):
     return items
 
 def get_value_from_path(data, path):
-    """Hole Wert anhand Pfad mit Punkt-Notation"""
     for part in path.split("."):
         data = data.get(part, {})
     return data if not isinstance(data, dict) else None
@@ -33,7 +31,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = []
     session = async_get_clientsession(hass)
 
-    url = f"http://{}/"
+    url = f"http://{ip}/"
     try:
         async with session.get(url, timeout=5) as resp:
             data = await resp.json()
@@ -42,12 +40,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
         uid = sbi.get("UID", "unknown")
         version = sbi.get("Ver", "unknown")
 
-        # Alle Schlüssel auf oberster Ebene von SBI, die KEIN dict sind
+        # Top-Level Keys (keine dicts)
         top_level_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
         for key in top_level_keys:
             entities.append(JsonHaSensor(hass, name, name, key, ip, update_interval, uid, version))
 
-        # Sensoren für verschachtelte Gruppen wie SB, GRID, INV
+        # Verschachtelte Gruppen
         for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
@@ -58,7 +56,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
         _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
 
     async_add_entities(entities, True)
-
 
 class JsonHaSensor(Entity):
     def __init__(self, hass, base_name, group, key, ip, update_interval, uid, version):
@@ -71,10 +68,9 @@ class JsonHaSensor(Entity):
         self._version = version
         self._state = None
         self._unsub_update = None
-        self._update_interval = timedelta(seconds=Interval)
+        self._update_interval = timedelta(seconds=update_interval)
 
-        # Name: <base_name> <key> (wenn group == base_name → Top-Level-Sensor)
-        key_short = key[len(group) + 1:] if key.startswith(group + ".") else key
+        key_short = key[len(group)+1:] if key.startswith(group + ".") else key
         self._name = f"{base_name} {key_short}"
 
     @property
@@ -96,10 +92,10 @@ class JsonHaSensor(Entity):
     @property
     def device_info(self):
         return {
-            "identifiers": {(DOMAIN, self._uid)},  # UID eindeutig als Gerätekennung
+            "identifiers": {(DOMAIN, self._uid)},
             "name": self._base_name,
-            "manufacturer": "Manu",            # Gern anpassen
-            "model": "Box",                # Gern anpassen
+            "manufacturer": "Manufacturer",
+            "model": "Model",
             "sw_version": self._version,
         }
 
