@@ -27,7 +27,10 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     resp.raise_for_status()
                     data = await resp.json()
                 sbi = data.get("SBI", {})
-                self.available_groups = list(sbi.keys())  # Hauptgruppen
+
+                # UID und Ver aus der Auswahl rausfiltern
+                self.available_groups = [grp for grp in sbi.keys() if grp not in ("UID", "Ver")]
+
                 return await self.async_step_select_groups()
             except Exception as e:
                 _LOGGER.error(f"Cannot connect to {url}: {e}")
@@ -53,6 +56,10 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_select_groups(self, user_input=None):
         if user_input is not None:
             selected_groups = [grp for grp, val in user_input.items() if val]
+
+            # UID und Ver immer automatisch hinzufügen
+            selected_groups += ["UID", "Ver"]
+
             return self.async_create_entry(
                 title=self.name,
                 data={
