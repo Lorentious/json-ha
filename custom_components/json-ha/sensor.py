@@ -43,7 +43,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         # Alle Keys aus SBI, die KEIN Dict sind → in "ROOT" packen
         root_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
         for key in root_keys:
-            entities.append(JsonHaSensor(hass, name, "ROOT", key, ip, update_interval, sbi.get("UID")))
+            entities.append(JsonHaSensor(hass, name, self._name, key, ip, update_interval, sbi.get("UID")))
 
         # Sensoren für verschachtelte Gruppen wie SB, GRID, INV
         for group in selected_groups:
@@ -94,8 +94,8 @@ class JsonHaSensor(Entity):
         return {
             "identifiers": {(DOMAIN, self._ip)},  # oder self._uid statt IP
             "name": self._base_name,
-            "manufacturer": "Snettbox",
-            "model": "SBI",
+            "manufacturer": "Manufacturer",
+            "model": "Model",
         }
 
     async def async_added_to_hass(self):
