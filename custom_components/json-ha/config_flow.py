@@ -34,9 +34,9 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_show_form(
                     step_id="user",
                     data_schema=vol.Schema({
-                        vol.Required("ip_address"): str,
+                        vol.Required("IP-Address"): str,
                         vol.Required("Name"): str,
-                        vol.Required("update_interval", default=15): int,
+                        vol.Required("Interval", default=15): int,
                     }),
                     errors={"base": "cannot_connect"}
                 )
@@ -44,9 +44,9 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required("ip_address"): str,
+                vol.Required("IP-Address"): str,
                 vol.Required("Name"): str,
-                vol.Required("update_interval", default=15): int,
+                vol.Required("Interval", default=15): int,
             })
         )
 
@@ -56,9 +56,9 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(
                 title=self.name,
                 data={
-                    "ip_address": self.ip,
-                    "name": self.name,
-                    "update_interval": self.update_interval,
+                    "IP-Address": self.ip,
+                    "Name": self.name,
+                    "Interval": self.update_interval,
                     "selected_groups": selected_groups,
                 }
             )
