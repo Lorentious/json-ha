@@ -97,6 +97,7 @@ class JsonHaSensor(Entity):
             "manufacturer": "Manufacturer",
             "model": "Model",
             "sw_version": self._version,
+            "serial_number": self._uid,
         }
 
     async def async_added_to_hass(self):
