@@ -27,7 +27,7 @@ def get_value_from_path(data, path):
 async def async_setup_entry(hass, entry, async_add_entities):
     ip = entry.data["ip_address"]
     name = entry.data["name"]
-    update_interval = entry.data.get("update_interval", 60)
+    update_interval = entry.data.get("update_interval", 15)
     selected_groups = entry.data["selected_groups"]
 
     entities = []
