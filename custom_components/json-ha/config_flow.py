@@ -15,9 +15,9 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
-            self.ip = user_input["ip_address"]
-            self.name = user_input["name"]
-            self.update_interval = user_input.get("update_interval", 15)
+            self.ip = user_input["IP-Address"]
+            self.name = user_input["Name"]
+            self.update_interval = user_input.get("Interval", 15)
             session = async_get_clientsession(self.hass)
             url = DEFAULT_URL.format(ip=self.ip)
 
