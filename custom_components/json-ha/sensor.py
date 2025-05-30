@@ -26,7 +26,7 @@ def get_value_from_path(data, path):
 
 async def async_setup_entry(hass, entry, async_add_entities):
     ip = entry.data["ip_address"]
-    name = entry.data["name"]
+    name = entry.data["Name"]
     update_interval = entry.data.get("update_interval", 15)
     selected_groups = entry.data["selected_groups"]
 
@@ -40,18 +40,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         sbi = data.get("SBI", {})
         uid = sbi.get("UID", "unknown")
+        version = sbi.get("Ver", "unknown")
 
-        # Alle Top-Level-Keys aus SBI, die KEIN Dict sind
-        root_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
-        for key in root_keys:
-            entities.append(JsonHaSensor(hass, name, "ROOT", key, ip, update_interval, uid))
+        # Alle Schlüssel auf oberster Ebene von SBI, die KEIN dict sind
+        top_level_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
+        for key in top_level_keys:
+            entities.append(JsonHaSensor(hass, name, name, key, ip, update_interval, uid, version))
 
-        # Sensoren für Gruppen wie SB, GRID, INV
+        # Sensoren für verschachtelte Gruppen wie SB, GRID, INV
         for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
             for key in keys:
-                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, uid))
+                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, uid, version))
 
     except Exception as e:
         _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
@@ -60,19 +61,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class JsonHaSensor(Entity):
-    def __init__(self, hass, base_name, group, key, ip, update_interval, uid):
+    def __init__(self, hass, base_name, group, key, ip, update_interval, uid, version):
         self._hass = hass
         self._base_name = base_name
         self._group = group
         self._key = key
         self._ip = ip
         self._uid = uid
+        self._version = version
         self._state = None
         self._unsub_update = None
         self._update_interval = timedelta(seconds=update_interval)
 
-        key_short = key[len(group)+1:] if key.startswith(group + ".") else key
-        self._name = f"{base_name} {group} {key_short}"
+        # Name: <base_name> <key> (wenn group == base_name → Top-Level-Sensor)
+        key_short = key[len(group) + 1:] if key.startswith(group + ".") else key
+        self._name = f"{base_name} {key_short}"
 
     @property
     def name(self):
@@ -93,10 +96,11 @@ class JsonHaSensor(Entity):
     @property
     def device_info(self):
         return {
-            "identifiers": {(DOMAIN, self._ip)},  # Optional: self._uid
+            "identifiers": {(DOMAIN, self._uid)},  # UID eindeutig als Gerätekennung
             "name": self._base_name,
-            "manufacturer": "Herstellername",     # Optional anpassen
-            "model": "Modellname",                # Optional anpassen
+            "manufacturer": "Snettbox",            # Gern anpassen
+            "model": "Snettbox v1",                # Gern anpassen
+            "sw_version": self._version,
         }
 
     async def async_added_to_hass(self):
