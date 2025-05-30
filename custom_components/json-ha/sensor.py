@@ -40,25 +40,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         sbi = data.get("SBI", {})
 
-        # Top-Level-Felder extrahieren
-        uid = sbi.get("UID")
-        version = sbi.get("Ver")
-        timestamp = sbi.get("t")
+        # Alle Keys aus SBI, die KEIN Dict sind → in "ROOT" packen
+        root_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
+        for key in root_keys:
+            entities.append(JsonHaSensor(hass, name, "ROOT", key, ip, update_interval, sbi.get("UID")))
 
-        # Info-Sensor hinzufügen
-        entities.append(JsonHaInfoSensor(name, ip, uid, version, timestamp))
-
-        # Sensoren für verschachtelte Gruppen wie SB, GRID usw.
+        # Sensoren für verschachtelte Gruppen wie SB, GRID, INV
         for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
             for key in keys:
-                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, uid))
+                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, sbi.get("UID")))
 
     except Exception as e:
         _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
 
     async_add_entities(entities, True)
+
 
 class JsonHaSensor(Entity):
     def __init__(self, hass, base_name, group, key, ip, update_interval, uid):
