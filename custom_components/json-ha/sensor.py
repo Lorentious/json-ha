@@ -25,7 +25,7 @@ def get_value_from_path(data, path):
     return data if not isinstance(data, dict) else None
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    ip = entry.data["ip_address"]
+    ip = entry.data["IP-Address"]
     name = entry.data["Name"]
     update_interval = entry.data.get("update_interval", 15)
     selected_groups = entry.data["selected_groups"]
@@ -33,7 +33,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = []
     session = async_get_clientsession(hass)
 
-    url = f"http://{ip}/"
+    url = f"http://{}/"
     try:
         async with session.get(url, timeout=5) as resp:
             data = await resp.json()
