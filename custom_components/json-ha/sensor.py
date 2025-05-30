@@ -39,18 +39,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
             data = await resp.json()
 
         sbi = data.get("SBI", {})
+        uid = sbi.get("UID", "unknown")
 
-        # Alle Keys aus SBI, die KEIN Dict sind → in "ROOT" packen
+        # Alle Top-Level-Keys aus SBI, die KEIN Dict sind
         root_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
         for key in root_keys:
-            entities.append(JsonHaSensor(hass, name, self._name, key, ip, update_interval, sbi.get("UID")))
+            entities.append(JsonHaSensor(hass, name, "ROOT", key, ip, update_interval, uid))
 
-        # Sensoren für verschachtelte Gruppen wie SB, GRID, INV
+        # Sensoren für Gruppen wie SB, GRID, INV
         for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
             for key in keys:
-                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, sbi.get("UID")))
+                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, uid))
 
     except Exception as e:
         _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
@@ -92,10 +93,10 @@ class JsonHaSensor(Entity):
     @property
     def device_info(self):
         return {
-            "identifiers": {(DOMAIN, self._ip)},  # oder self._uid statt IP
+            "identifiers": {(DOMAIN, self._ip)},  # Optional: self._uid
             "name": self._base_name,
-            "manufacturer": "Manufacturer",
-            "model": "Model",
+            "manufacturer": "Herstellername",     # Optional anpassen
+            "model": "Modellname",                # Optional anpassen
         }
 
     async def async_added_to_hass(self):
@@ -121,48 +122,3 @@ class JsonHaSensor(Entity):
         except Exception as e:
             _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
             self._state = None
-
-class JsonHaInfoSensor(Entity):
-    def __init__(self, base_name, ip, uid, version, timestamp):
-        self._name = f"{base_name} Info"
-        self._base_name = base_name
-        self._ip = ip
-        self._uid = uid
-        self._version = version
-        self._timestamp = timestamp
-        self._state = "Online" if uid else "Offline"
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def unique_id(self):
-        return f"{self._ip}_info"
-
-    @property
-    def should_poll(self):
-        return False
-
-    @property
-    def state(self):
-        return self._state
-
-    @property
-    def extra_state_attributes(self):
-        return {
-            "name": self._base_name,
-            "uid": self._uid,
-            "version": self._version,
-            "timestamp": self._timestamp
-        }
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._ip)},  # oder self._uid für stabilere Zuordnung
-            "name": self._name,
-            "manufacturer": "Manufacturer",
-            "model": "Model",
-            "sw_version": self._version,
-        }
