@@ -27,7 +27,7 @@ def get_value_from_path(data, path):
 async def async_setup_entry(hass, entry, async_add_entities):
     ip = entry.data["IP-Address"]
     name = entry.data["Name"]
-    update_interval = entry.data.get("update_interval", 15)
+    update_interval = entry.data.get("Interval", 15)
     selected_groups = entry.data["selected_groups"]
 
     entities = []
@@ -71,7 +71,7 @@ class JsonHaSensor(Entity):
         self._version = version
         self._state = None
         self._unsub_update = None
-        self._update_interval = timedelta(seconds=update_interval)
+        self._update_interval = timedelta(seconds=Interval)
 
         # Name: <base_name> <key> (wenn group == base_name → Top-Level-Sensor)
         key_short = key[len(group) + 1:] if key.startswith(group + ".") else key
@@ -98,8 +98,8 @@ class JsonHaSensor(Entity):
         return {
             "identifiers": {(DOMAIN, self._uid)},  # UID eindeutig als Gerätekennung
             "name": self._base_name,
-            "manufacturer": "Snettbox",            # Gern anpassen
-            "model": "Snettbox v1",                # Gern anpassen
+            "manufacturer": "Manu",            # Gern anpassen
+            "model": "Box",                # Gern anpassen
             "sw_version": self._version,
         }
 
