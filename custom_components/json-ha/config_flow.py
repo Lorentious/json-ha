@@ -35,7 +35,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     step_id="user",
                     data_schema=vol.Schema({
                         vol.Required("ip_address"): str,
-                        vol.Required("name"): str,
+                        vol.Required("Name"): str,
                         vol.Required("update_interval", default=15): int,
                     }),
                     errors={"base": "cannot_connect"}
@@ -45,7 +45,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required("ip_address"): str,
-                vol.Required("name"): str,
+                vol.Required("Name"): str,
                 vol.Required("update_interval", default=15): int,
             })
         )
