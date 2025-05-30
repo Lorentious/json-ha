@@ -11,7 +11,6 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         self.ip = None
         self.name = None
-        self.update_interval = 60
         self.available_groups = []
 
     async def async_step_user(self, user_input=None):
@@ -28,13 +27,7 @@ class JsonHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     resp.raise_for_status()
                     data = await resp.json()
                 sbi = data.get("SBI", {})
-                self.available_groups = []
-                for key, val in sbi.items():
-                    if isinstance(val, dict):
-                        self.available_groups.append(key)
-                    else:
-                        self.available_groups.append("SBI_ROOT")
-                        break  # Nur einmal hinzufügen
+                self.available_groups = list(sbi.keys())  # Hauptgruppen
                 return await self.async_step_select_groups()
             except Exception as e:
                 _LOGGER.error(f"Cannot connect to {url}: {e}")
