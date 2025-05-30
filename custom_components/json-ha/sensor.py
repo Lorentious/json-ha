@@ -162,7 +162,7 @@ class JsonHaInfoSensor(Entity):
         return {
             "identifiers": {(DOMAIN, self._ip)},  # oder self._uid für stabilere Zuordnung
             "name": self._name,
-            "manufacturer": "JSON",
-            "model": "jsssno",
+            "manufacturer": "Manufacturer",
+            "model": "Model",
             "sw_version": self._version,
         }
