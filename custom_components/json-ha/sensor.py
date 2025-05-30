@@ -37,19 +37,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
     try:
         async with session.get(url, timeout=5) as resp:
             data = await resp.json()
+
         sbi = data.get("SBI", {})
 
-        # Top-Level Keys, die KEINE dicts sind
-        for key, value in sbi.items():
-            if not isinstance(value, dict):
-                entities.append(JsonHaSensor(hass, name, "", key, ip, update_interval))
+        # Top-Level-Felder extrahieren
+        uid = sbi.get("UID")
+        version = sbi.get("Ver")
+        timestamp = sbi.get("t")
 
-        # Für jede Gruppe alle Keys holen, Sensoren erzeugen
+        # Info-Sensor hinzufügen
+        entities.append(JsonHaInfoSensor(name, ip, uid, version, timestamp))
+
+        # Sensoren für verschachtelte Gruppen wie SB, GRID usw.
         for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
             for key in keys:
-                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval))
+                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, uid))
 
     except Exception as e:
         _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
@@ -57,22 +61,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities, True)
 
 class JsonHaSensor(Entity):
-    def __init__(self, hass, base_name, group, key, ip, update_interval):
+    def __init__(self, hass, base_name, group, key, ip, update_interval, uid):
         self._hass = hass
         self._base_name = base_name
         self._group = group
         self._key = key
         self._ip = ip
+        self._uid = uid
         self._state = None
         self._unsub_update = None
         self._update_interval = timedelta(seconds=update_interval)
 
-        # Name: <base_name> <group> <key> (key ohne group, nur letzter Teil)
-        if group:
-            key_short = key[len(group)+1:] if key.startswith(group + ".") else key
-            self._name = f"{base_name} {group} {key_short}"
-        else:
-            self._name = f"{base_name} {key}"
+        key_short = key[len(group)+1:] if key.startswith(group + ".") else key
+        self._name = f"{base_name} {group} {key_short}"
 
     @property
     def name(self):
@@ -84,12 +85,20 @@ class JsonHaSensor(Entity):
 
     @property
     def unique_id(self):
-        # IP + Gruppe + kompletter key
         return f"{self._ip}_{self._group}_{self._key}"
 
     @property
     def should_poll(self):
         return False
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._ip)},  # oder self._uid statt IP
+            "name": self._base_name,
+            "manufacturer": "Snettbox",
+            "model": "SBI",
+        }
 
     async def async_added_to_hass(self):
         self._unsub_update = async_track_time_interval(
@@ -114,3 +123,48 @@ class JsonHaSensor(Entity):
         except Exception as e:
             _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
             self._state = None
+
+class JsonHaInfoSensor(Entity):
+    def __init__(self, base_name, ip, uid, version, timestamp):
+        self._name = f"{base_name} Info"
+        self._base_name = base_name
+        self._ip = ip
+        self._uid = uid
+        self._version = version
+        self._timestamp = timestamp
+        self._state = "Online" if uid else "Offline"
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def unique_id(self):
+        return f"{self._ip}_info"
+
+    @property
+    def should_poll(self):
+        return False
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "name": self._base_name,
+            "uid": self._uid,
+            "version": self._version,
+            "timestamp": self._timestamp
+        }
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._ip)},  # oder self._uid für stabilere Zuordnung
+            "name": self._name,
+            "manufacturer": "JSON",
+            "model": "jsssno",
+            "sw_version": self._version,
+        }
