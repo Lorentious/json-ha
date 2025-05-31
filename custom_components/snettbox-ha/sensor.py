@@ -1,13 +1,25 @@
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import logging
-from .const import DOMAIN
 from homeassistant.helpers.event import async_track_time_interval
 from datetime import timedelta
+from .const import DOMAIN
+import logging
+import json
+import os
 
 _LOGGER = logging.getLogger(__name__)
 
+# Icons laden
+ICON_PATH = os.path.join(os.path.dirname(__file__), "icons.json")
+try:
+    with open(ICON_PATH, "r", encoding="utf-8") as f:
+        ICON_MAP = json.load(f)
+except Exception as e:
+    _LOGGER.warning(f"Konnte icons.json nicht laden: {e}")
+    ICON_MAP = {}
+
 def flatten_keys(d, parent_key=""):
+    """Rekursiv alle Keys aus dict holen, mit Punkt-Notation"""
     items = []
     for k, v in d.items():
         new_key = f"{parent_key}.{k}" if parent_key else k
@@ -18,6 +30,7 @@ def flatten_keys(d, parent_key=""):
     return items
 
 def get_value_from_path(data, path):
+    """Hole Wert anhand Pfad mit Punkt-Notation"""
     for part in path.split("."):
         data = data.get(part, {})
     return data if not isinstance(data, dict) else None
@@ -40,12 +53,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
         uid = sbi.get("UID", "unknown")
         version = sbi.get("Ver", "unknown")
 
-        # Top-Level Keys (keine dicts)
+        # Alle Schlüssel auf oberster Ebene von SBI, die KEIN dict sind
         top_level_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
         for key in top_level_keys:
             entities.append(JsonHaSensor(hass, name, name, key, ip, update_interval, uid, version))
 
-        # Verschachtelte Gruppen
+        # Sensoren für verschachtelte Gruppen wie SB, GRID, INV
         for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
@@ -56,6 +69,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
 
     async_add_entities(entities, True)
+
 
 class JsonHaSensor(Entity):
     def __init__(self, hass, base_name, group, key, ip, update_interval, uid, version):
@@ -70,7 +84,7 @@ class JsonHaSensor(Entity):
         self._unsub_update = None
         self._update_interval = timedelta(seconds=update_interval)
 
-        key_short = key[len(group)+1:] if key.startswith(group + ".") else key
+        key_short = key[len(group) + 1:] if key.startswith(group + ".") else key
         self._name = f"{base_name} {key_short}"
 
     @property
@@ -90,14 +104,17 @@ class JsonHaSensor(Entity):
         return False
 
     @property
+    def icon(self):
+        return ICON_MAP.get(self._key)
+
+    @property
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self._uid)},
             "name": self._base_name,
-            "manufacturer": "Manufacturer",
-            "model": "Model",
+            "manufacturer": "Manu",
+            "model": "Box",
             "sw_version": self._version,
-            "serial_number": self._uid,
         }
 
     async def async_added_to_hass(self):
