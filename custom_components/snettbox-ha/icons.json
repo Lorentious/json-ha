@@ -1,0 +1,7 @@
+{
+  "GRID.Power": "mdi:flash",
+  "GRID.Voltage": "mdi:flash-outline",
+  "SB.Status": "mdi:server",
+  "SB.Temp": "mdi:thermometer",
+  "INV.Frequency": "mdi:sine-wave"
+}
