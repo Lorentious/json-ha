@@ -1,4 +1,7 @@
 {
-  "SB.Temp": "diagnostic",
-  "GRID.Power": "measurement"
+  "Err": "diagnostic",
+  "Sta": "diagnostic",
+  "T": "diagnostic",
+  "UID": "diagnostic",
+  "Ver": "diagnostic"
 }
