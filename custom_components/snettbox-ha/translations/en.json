@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Snettbox",
+        "description": "Enter the IP-Address of your Snettbox.",
+        "data": {
+          "ip_address": "IP-Address"
+        }
+      }
+    }
+  }
+}
