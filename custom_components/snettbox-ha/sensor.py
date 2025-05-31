@@ -1,97 +1,80 @@
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import logging
-from .const import DOMAIN
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.const import TEMP_CELSIUS
 from datetime import timedelta
-import os
-import json
+import async_timeout
+import logging
+
+from .const import DOMAIN, DEFAULT_URL
 
 _LOGGER = logging.getLogger(__name__)
 
-# JSON-Dateien laden
-ICON_FILE = os.path.join(os.path.dirname(__file__), "icons.json")
-CATEGORY_FILE = os.path.join(os.path.dirname(__file__), "categories.json")
 
-try:
-    with open(ICON_FILE, "r", encoding="utf-8") as f:
-        ICON_MAP = json.load(f)
-except Exception as e:
-    _LOGGER.warning(f"Konnte icons.json nicht laden: {e}")
-    ICON_MAP = {}
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    ip = config_entry.data["IP-Address"]
+    name = config_entry.data["Name"]
+    update_interval = config_entry.data.get("Interval", 15)
+    selected_groups = config_entry.data.get("selected_groups", [])
 
-try:
-    with open(CATEGORY_FILE, "r", encoding="utf-8") as f:
-        ENTITY_CATEGORY_MAP = json.load(f)
-except Exception as e:
-    _LOGGER.warning(f"Konnte categories.json nicht laden: {e}")
-    ENTITY_CATEGORY_MAP = {}
+    session = async_get_clientsession(hass)
+    url = DEFAULT_URL.format(ip=ip)
 
-def flatten_keys(d, parent_key=""):
-    items = []
-    for k, v in d.items():
-        new_key = f"{parent_key}.{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_keys(v, new_key))
-        else:
-            items.append(new_key)
-    return items
+    async def async_update_data():
+        try:
+            async with async_timeout.timeout(5):
+                response = await session.get(url)
+                response.raise_for_status()
+                return await response.json()
+        except Exception as err:
+            raise UpdateFailed(f"Error fetching data: {err}")
 
-def get_value_from_path(data, path):
-    for part in path.split("."):
-        data = data.get(part, {})
-    return data if not isinstance(data, dict) else None
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        name="json_ha",
+        update_method=async_update_data,
+        update_interval=timedelta(seconds=update_interval),
+    )
 
-async def async_setup_entry(hass, entry, async_add_entities):
-    ip = entry.data["IP-Address"]
-    name = entry.data["Name"]
-    update_interval = entry.data.get("Interval", 15)
-    selected_groups = entry.data["selected_groups"]
+    await coordinator.async_config_entry_first_refresh()
+    data = coordinator.data
+    sbi = data.get("SBI", {})
+    uid = sbi.get("UID", "unknown")
+    version = sbi.get("Ver", "unknown")
 
     entities = []
-    session = async_get_clientsession(hass)
 
-    url = f"http://{ip}/"
-    try:
-        async with session.get(url, timeout=5) as resp:
-            data = await resp.json()
+    # UID, Ver, t, Sta, Err oben direkt integrieren
+    for key in ["UID", "Ver", "t", "Sta", "Err"]:
+        if key in sbi:
+            entities.append(JsonHaSensor(hass, name, "SBI", key, ip, update_interval, uid, version, coordinator))
 
-        sbi = data.get("SBI", {})
-        uid = sbi.get("UID", "unknown")
-        version = sbi.get("Ver", "unknown")
+    # Untergruppen durchgehen (SB, GRID, etc.)
+    for group in selected_groups:
+        group_data = sbi.get(group, {})
+        if isinstance(group_data, dict):
+            for subkey, value in group_data.items():
+                full_key = f"{group}.{subkey}"
+                entities.append(JsonHaSensor(hass, name, group, full_key, ip, update_interval, uid, version, coordinator))
+        else:
+            _LOGGER.warning(f"{group} ist keine Untergruppe im JSON.")
 
-        # Top-Level-Sensoren (UID, Ver etc.)
-        top_level_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
-        for key in top_level_keys:
-            entities.append(JsonHaSensor(hass, name, name, key, ip, update_interval, uid, version))
+    async_add_entities(entities)
 
-        # Gruppen-Sensoren
-        for group in selected_groups:
-            group_data = sbi.get(group, {})
-            keys = flatten_keys(group_data, group)
-            for key in keys:
-                entities.append(JsonHaSensor(hass, name, group, key, ip, update_interval, uid, version))
-
-    except Exception as e:
-        _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
-
-    async_add_entities(entities, True)
 
 class JsonHaSensor(Entity):
-    def __init__(self, hass, base_name, group, key, ip, update_interval, uid, version):
+    def __init__(self, hass, name, group, key, ip, interval, uid, version, coordinator):
         self._hass = hass
-        self._base_name = base_name
+        self._name = f"{name} {key}"
         self._group = group
         self._key = key
         self._ip = ip
+        self._interval = interval
         self._uid = uid
         self._version = version
         self._state = None
-        self._unsub_update = None
-        self._update_interval = timedelta(seconds=update_interval)
-
-        key_short = key[len(group) + 1:] if key.startswith(group + ".") else key
-        self._name = f"{base_name} {key_short}"
+        self._coordinator = coordinator
 
     @property
     def name(self):
@@ -99,54 +82,47 @@ class JsonHaSensor(Entity):
 
     @property
     def unique_id(self):
-        return f"{self._ip}_{self._group}_{self._key}"
-
-    @property
-    def should_poll(self):
-        return False
+        return f"{self._uid}_{self._key}"
 
     @property
     def state(self):
         return self._state
 
     @property
-    def icon(self):
-        return ICON_MAP.get(self._key)
+    def available(self):
+        return self._coordinator.last_update_success
 
     @property
-    def entity_category(self):
-        return ENTITY_CATEGORY_MAP.get(self._key)
-
-    @property
-    def device_info(self):
+    def extra_state_attributes(self):
         return {
-            "identifiers": {(DOMAIN, self._uid)},
-            "name": self._base_name,
-            "manufacturer": "Manu",
-            "model": "Box",
-            "sw_version": self._version,
+            "uid": self._uid,
+            "version": self._version,
+            "group": self._group,
+            "key": self._key,
+            "ip": self._ip,
+            "interval": self._interval,
         }
 
+    async def async_update(self):
+        await self._coordinator.async_request_refresh()
+        self._update_from_data()
+
     async def async_added_to_hass(self):
-        self._unsub_update = async_track_time_interval(
-            self._hass, self.async_update, self._update_interval
-        )
-        await self.async_update()
+        self._coordinator.async_add_listener(self._handle_coordinator_update)
+        self._update_from_data()
 
-    async def async_will_remove_from_hass(self):
-        if self._unsub_update:
-            self._unsub_update()
-            self._unsub_update = None
+    def _handle_coordinator_update(self):
+        self._update_from_data()
+        self.async_write_ha_state()
 
-    async def async_update(self, now=None):
-        url = f"http://{self._ip}/"
-        session = async_get_clientsession(self._hass)
-        try:
-            async with session.get(url, timeout=5) as resp:
-                data = await resp.json()
-            sbi = data.get("SBI", {})
-            self._state = get_value_from_path(sbi, self._key)
-            self.async_write_ha_state()
-        except Exception as e:
-            _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
-            self._state = None
+    def _update_from_data(self):
+        data = self._coordinator.data or {}
+        sbi = data.get("SBI", {})
+        if self._group == "SBI":
+            self._state = sbi.get(self._key)
+        else:
+            group_data = sbi.get(self._group, {})
+            if isinstance(group_data, dict):
+                self._state = group_data.get(self._key.split(".")[-1])
+            else:
+                self._state = None
