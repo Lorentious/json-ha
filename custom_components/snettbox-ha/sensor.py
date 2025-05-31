@@ -1,25 +1,33 @@
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import logging
+from .const import DOMAIN
 from homeassistant.helpers.event import async_track_time_interval
 from datetime import timedelta
-from .const import DOMAIN
-import logging
-import json
 import os
+import json
 
 _LOGGER = logging.getLogger(__name__)
 
-# Icons laden
-ICON_PATH = os.path.join(os.path.dirname(__file__), "icons.json")
+# JSON-Dateien laden
+ICON_FILE = os.path.join(os.path.dirname(__file__), "icons.json")
+CATEGORY_FILE = os.path.join(os.path.dirname(__file__), "categories.json")
+
 try:
-    with open(ICON_PATH, "r", encoding="utf-8") as f:
+    with open(ICON_FILE, "r", encoding="utf-8") as f:
         ICON_MAP = json.load(f)
 except Exception as e:
     _LOGGER.warning(f"Konnte icons.json nicht laden: {e}")
     ICON_MAP = {}
 
+try:
+    with open(CATEGORY_FILE, "r", encoding="utf-8") as f:
+        ENTITY_CATEGORY_MAP = json.load(f)
+except Exception as e:
+    _LOGGER.warning(f"Konnte categories.json nicht laden: {e}")
+    ENTITY_CATEGORY_MAP = {}
+
 def flatten_keys(d, parent_key=""):
-    """Rekursiv alle Keys aus dict holen, mit Punkt-Notation"""
     items = []
     for k, v in d.items():
         new_key = f"{parent_key}.{k}" if parent_key else k
@@ -30,7 +38,6 @@ def flatten_keys(d, parent_key=""):
     return items
 
 def get_value_from_path(data, path):
-    """Hole Wert anhand Pfad mit Punkt-Notation"""
     for part in path.split("."):
         data = data.get(part, {})
     return data if not isinstance(data, dict) else None
@@ -53,12 +60,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
         uid = sbi.get("UID", "unknown")
         version = sbi.get("Ver", "unknown")
 
-        # Alle Schlüssel auf oberster Ebene von SBI, die KEIN dict sind
+        # Top-Level-Sensoren (UID, Ver etc.)
         top_level_keys = {k: v for k, v in sbi.items() if not isinstance(v, dict)}
         for key in top_level_keys:
             entities.append(JsonHaSensor(hass, name, name, key, ip, update_interval, uid, version))
 
-        # Sensoren für verschachtelte Gruppen wie SB, GRID, INV
+        # Gruppen-Sensoren
         for group in selected_groups:
             group_data = sbi.get(group, {})
             keys = flatten_keys(group_data, group)
@@ -69,7 +76,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
         _LOGGER.error(f"Fehler beim Abrufen der JSON-Daten: {e}")
 
     async_add_entities(entities, True)
-
 
 class JsonHaSensor(Entity):
     def __init__(self, hass, base_name, group, key, ip, update_interval, uid, version):
@@ -92,10 +98,6 @@ class JsonHaSensor(Entity):
         return self._name
 
     @property
-    def state(self):
-        return self._state
-
-    @property
     def unique_id(self):
         return f"{self._ip}_{self._group}_{self._key}"
 
@@ -104,8 +106,16 @@ class JsonHaSensor(Entity):
         return False
 
     @property
+    def state(self):
+        return self._state
+
+    @property
     def icon(self):
         return ICON_MAP.get(self._key)
+
+    @property
+    def entity_category(self):
+        return ENTITY_CATEGORY_MAP.get(self._key)
 
     @property
     def device_info(self):
