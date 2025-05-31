@@ -1,128 +1,89 @@
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.const import TEMP_CELSIUS
-from datetime import timedelta
-import async_timeout
-import logging
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.components.sensor import SensorEntity
+from .const import DOMAIN, DEVICE_CATEGORIES, ICONS
+from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, DEFAULT_URL
+def flatten_json(data, parent_key=''):
+    """Flacht geschachtelte JSON in Schlüssel-Werte-Paare ab."""
+    items = []
+    for k, v in data.items():
+        new_key = f"{parent_key}.{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_json(v, new_key))
+        else:
+            items.append((new_key, v))
+    return items
 
-_LOGGER = logging.getLogger(__name__)
+async def async_setup_entry(hass, entry, async_add_entities):
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    selected_groups = entry.data.get("selected_groups", [])
+    ip = entry.data["IP-Address"]
+    name = entry.data["Name"]
 
-
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    ip = config_entry.data["IP-Address"]
-    name = config_entry.data["Name"]
-    update_interval = config_entry.data.get("Interval", 15)
-    selected_groups = config_entry.data.get("selected_groups", [])
-
-    session = async_get_clientsession(hass)
-    url = DEFAULT_URL.format(ip=ip)
-
-    async def async_update_data():
-        try:
-            async with async_timeout.timeout(5):
-                response = await session.get(url)
-                response.raise_for_status()
-                return await response.json()
-        except Exception as err:
-            raise UpdateFailed(f"Error fetching data: {err}")
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name="json_ha",
-        update_method=async_update_data,
-        update_interval=timedelta(seconds=update_interval),
-    )
-
-    await coordinator.async_config_entry_first_refresh()
-    data = coordinator.data
-    sbi = data.get("SBI", {})
-    uid = sbi.get("UID", "unknown")
-    version = sbi.get("Ver", "unknown")
+    # UID und VER immer hinzufügen
+    raw_data = coordinator.data.get("SBI", {})
+    static_keys = {k: v for k, v in raw_data.items() if not isinstance(v, dict)}
+    dynamic_data = {k: v for k, v in raw_data.items() if isinstance(v, dict) and k in selected_groups}
 
     entities = []
 
-    # UID, Ver, t, Sta, Err oben direkt integrieren
-    for key in ["UID", "Ver", "t", "Sta", "Err"]:
-        if key in sbi:
-            entities.append(JsonHaSensor(hass, name, "SBI", key, ip, update_interval, uid, version, coordinator))
+    # UID, VER, t, Sta, Err etc. als Entitäten
+    for key, value in static_keys.items():
+        unique_id = f"{ip}_{key}"
+        icon = ICONS.get(key, "mdi:information-outline")
+        entities.append(JsonHaSensor(coordinator, name, key, value, unique_id, key, icon, "diagnose"))
 
-    # Untergruppen durchgehen (SB, GRID, etc.)
-    for group in selected_groups:
-        group_data = sbi.get(group, {})
-        if isinstance(group_data, dict):
-            for subkey, value in group_data.items():
-                full_key = f"{group}.{subkey}"
-                entities.append(JsonHaSensor(hass, name, group, full_key, ip, update_interval, uid, version, coordinator))
-        else:
-            _LOGGER.warning(f"{group} ist keine Untergruppe im JSON.")
+    # Alle ausgewählten Gruppen auflösen
+    for group_name, group_data in dynamic_data.items():
+        category = DEVICE_CATEGORIES.get(group_name, "sensor")
+        for key, value in group_data.items():
+            entity_key = f"{group_name}.{key}"
+            unique_id = f"{ip}_{entity_key}"
+            icon = ICONS.get(key, "mdi:information-outline")
+            entities.append(JsonHaSensor(coordinator, name, entity_key, value, unique_id, group_name, icon, category))
 
     async_add_entities(entities)
 
-
-class JsonHaSensor(Entity):
-    def __init__(self, hass, name, group, key, ip, interval, uid, version, coordinator):
-        self._hass = hass
-        self._name = f"{name} {key}"
+class JsonHaSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator, name, key, value, unique_id, group, icon, category):
+        super().__init__(coordinator)
+        self._attr_name = f"{name} {key}"
+        self._attr_unique_id = unique_id
+        self._attr_native_value = value
         self._group = group
-        self._key = key
-        self._ip = ip
-        self._interval = interval
-        self._uid = uid
-        self._version = version
-        self._state = None
-        self._coordinator = coordinator
+        self._icon = icon
+        self._category = category
 
     @property
-    def name(self):
-        return self._name
+    def icon(self):
+        return self._icon
 
     @property
-    def unique_id(self):
-        return f"{self._uid}_{self._key}"
+    def device_info(self):
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self.coordinator.data['SBI'].get('UID', 'unknown')}")},
+            name=self.coordinator.data['SBI'].get("UID", "JSON Device"),
+            manufacturer="json-ha",
+            model=self.coordinator.data['SBI'].get("Ver", "unknown"),
+        )
 
     @property
-    def state(self):
-        return self._state
-
-    @property
-    def available(self):
-        return self._coordinator.last_update_success
-
-    @property
-    def extra_state_attributes(self):
-        return {
-            "uid": self._uid,
-            "version": self._version,
-            "group": self._group,
-            "key": self._key,
-            "ip": self._ip,
-            "interval": self._interval,
-        }
-
-    async def async_update(self):
-        await self._coordinator.async_request_refresh()
-        self._update_from_data()
-
-    async def async_added_to_hass(self):
-        self._coordinator.async_add_listener(self._handle_coordinator_update)
-        self._update_from_data()
-
-    def _handle_coordinator_update(self):
-        self._update_from_data()
-        self.async_write_ha_state()
-
-    def _update_from_data(self):
-        data = self._coordinator.data or {}
-        sbi = data.get("SBI", {})
-        if self._group == "SBI":
-            self._state = sbi.get(self._key)
+    def entity_category(self):
+        if self._category == "diagnose":
+            return "diagnostic"
+        elif self._category == "steuerung":
+            return "config"
         else:
-            group_data = sbi.get(self._group, {})
-            if isinstance(group_data, dict):
-                self._state = group_data.get(self._key.split(".")[-1])
-            else:
-                self._state = None
+            return None
+
+    @property
+    def native_value(self):
+        # Jedes Mal den neuesten Wert aus dem Coordinator holen
+        try:
+            keys = self._attr_name.split(" ")[1].split(".")
+            value = self.coordinator.data["SBI"]
+            for k in keys:
+                value = value[k]
+            return value
+        except Exception:
+            return None
