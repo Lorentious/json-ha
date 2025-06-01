@@ -112,8 +112,8 @@ class JsonHaSensor(Entity):
         return {
             "identifiers": {(DOMAIN, self._uid)},
             "name": self._base_name,
-            "manufacturer": "Manu",
-            "model": "Box",
+            "manufacturer": "battery-direct",
+            "model": "Snettbox",
             "sw_version": self._version,
         }
 
