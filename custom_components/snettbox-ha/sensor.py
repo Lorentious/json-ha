@@ -32,8 +32,11 @@ def flatten_keys(d, parent_key=""):
 def get_value_from_path(data, path):
     """Hole Wert anhand Pfad mit Punkt-Notation"""
     for part in path.split("."):
-        data = data.get(part, {})
-    return data if not isinstance(data, dict) else None
+        if isinstance(data, dict) and part in data:
+            data = data[part]
+        else:
+            return None
+    return data
 
 async def async_setup_entry(hass, entry, async_add_entities):
     ip = entry.data["IP-Address"]
